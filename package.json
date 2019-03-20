@@ -1,0 +1,27 @@
+{
+  "name": "html5_game",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tissueboy/html5_game.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/tissueboy/html5_game/issues"
+  },
+  "homepage": "https://github.com/tissueboy/html5_game#readme",
+  "devDependencies": {
+    "parcel": "^1.12.2",
+    "sass": "^1.17.3"
+  },
+  "dependencies": {
+    "phina.js": "^0.2.3"
+  }
+}
