@@ -3,92 +3,125 @@ import "./style.scss";
 // phina.jsを有効化 <--- (1)
 import 'phina.js'
 
-/*
- * Runstant
- * 思いたったらすぐ開発. プログラミングに革命を...
- */
-
 // グローバルに展開
 phina.globalize();
-
-// 定数
+// アセット
 var ASSETS = {
+  // 画像
   image: {
-    bg: "http://jsrun.it/assets/a/G/5/Y/aG5YD.png",
-    tomapiko: 'http://cdn.rawgit.com/phi-jp/phina.js/v0.2.0/assets/images/tomapiko_ss.png',
+    'tomapiko': 'https://rawgit.com/phi-jp/phina.js/develop/assets/images/tomapiko_ss.png',
+  },
+  // フレームアニメーション情報
+  spritesheet: {
+    'tomapiko_ss': 'https://rawgit.com/phi-jp/phina.js/develop/assets/tmss/tomapiko.tmss',
   },
 };
-var SCREEN_WIDTH  = 465;              // スクリーン幅
-var SCREEN_HEIGHT = 465;              // スクリーン高さ
-var SPEED         = 4;
-
+// 定数
+var JUMP_POWOR = 10; // ジャンプ力
+var GRAVITY = 0.5; // 重力
 /*
  * メインシーン
  */
 phina.define("MainScene", {
   // 継承
   superClass: 'DisplayScene',
-
-  // 初期化
-  init: function(options) {
-    // super init
-    this.superInit(options);
-
+  // コンストラクタ
+  init: function() {
+    // 親クラス初期化
+    this.superInit();
     // 背景
-    this.bg = Sprite("bg").addChildTo(this);
-    this.bg.origin.set(0, 0); // 左上基準に変更
+    this.backgroundColor = 'skyblue';
 
-    // プレイヤー
-    this.player = Sprite('tomapiko', 64, 64).addChildTo(this);
-    this.player.setPosition(400, 400);
-    this.player.frameIndex = 0;
-  },
-
-  // 更新
-  update: function(app) {
-    var p = app.pointer;
-
-    if (p.getPointing()) {
-      var diff = this.player.x - p.x;
-      if (Math.abs(diff) > SPEED) {
-        // 右に移動
-        if (diff < 0) {
-          this.player.x += SPEED;
-          this.player.scaleX = -1;
-        }
-        // 左に移動
-        else {
-          this.player.x -= SPEED;
-          this.player.scaleX = 1;
-        }
-
-        // フレームアニメーション
-        if (app.frame % 4 === 0) {
-          this.player.frameIndex = (this.player.frameIndex === 12) ? 13:12;
-        }
+    Label({
+      text: 'Touch To Jump',
+      fontSize: 48,
+      fill: 'gray',
+    }).addChildTo(this).setPosition(this.gridX.center(), this.gridY.span(3));
+    // 床
+    this.floor = RectangleShape({
+      width: this.gridX.width,
+      height: this.gridY.span(1),
+      fill: 'silver',
+    }).addChildTo(this).setPosition(this.gridX.center(), this.gridY.center(2));
+    // プレイヤー作成
+    var player = Player('tomapiko').addChildTo(this);
+    // 初期位置
+    player.x = this.gridX.center();
+    player.bottom = this.floor.top;
+    // 画面タッチ時処理
+    this.onpointend = function() {
+      // 床の上なら
+      if (player.isOnFloor) {
+        // 上方向に速度を与える（ジャンプ）
+        player.physical.velocity.y = -JUMP_POWOR;
+        // 重力復活
+        player.physical.gravity.y = GRAVITY;
+        // フラグ変更
+        player.isOnFloor = false;
+        // アニメーション変更
+        player.anim.gotoAndPlay('fly');
       }
+    };
+    // 参照用
+    this.player = player;
+  },
+  // 毎フレーム処理
+  update: function() {
+    var player = this.player;
+    // 床とヒットしたら
+    if (player.hitTestElement(this.floor)) {
+      // y方向の速度と重力を無効にする
+      player.physical.velocity.y = 0;
+      player.physical.gravity.y = 0;
+      // 位置調整
+      player.bottom = this.floor.top;
+      // フラグ立て
+      player.isOnFloor = true;
+      // アニメーション変更
+      player.anim.gotoAndPlay('left');
     }
-    else {
-      // 待機
-      this.player.frameIndex = 0;
-    }
-  }
+  },
 });
-
+/*
+ * プレイヤークラス
+ */
+phina.define('Player', {
+  superClass: 'Sprite',
+  // コンストラクタ
+  init: function(image) {
+    // 親クラス初期化
+    this.superInit(image);
+    // フレームアニメーションをアタッチ
+    this.anim = FrameAnimation('tomapiko_ss').attachTo(this);
+    // 初期アニメーション指定
+    this.anim.gotoAndPlay('left');
+    // 初速度を与える
+    this.physical.force(-2, 0);
+    // 床の上かどうか
+    this.isOnFloor = true;
+  },
+  // 毎フレーム処理
+  update: function() {
+    // 画面端で速度と向き反転
+    if (this.left < 0 || this.right > 640) {
+      this.physical.velocity.x *= -1;
+      this.scaleX *= -1;
+    }
+  },
+});
 /*
  * メイン処理
  */
 phina.main(function() {
   // アプリケーションを生成
   var app = GameApp({
-    startLabel: 'main',   // MainScene から開始
-    width: SCREEN_WIDTH,  // 画面幅
-    height: SCREEN_HEIGHT,// 画面高さ
-    assets: ASSETS,       // アセット読み込み
+    // MainScene から開始
+    startLabel: 'main',
+    // アセット読み込み
+    assets: ASSETS,
   });
-
-  app.enableStats();
-
+  // fps表示
+  //app.enableStats();
   // 実行
   app.run();
 });
