@@ -57,6 +57,8 @@ var DIRECTION = 0;
 var SPEED = 4;
 var TOUCH_START_X = 0;
 var TOUCH_START_Y = 0;
+var HIT_RADIUS = 40;
+
 /*
  * メインシーン
  */
@@ -86,9 +88,16 @@ phina.define("MainScene", {
     }).addChildTo(this).setPosition(this.gridX.center(), this.gridY.center(2));
     // プレイヤー作成
     var player = Player('player').addChildTo(this);
+    // var c1 = Circle(player.x, player.y, HIT_RADIUS); 
+    var player_collider = CircleShape().addChildTo(this);
+    player_collider.radius = HIT_RADIUS;
+    player_collider.fill = null;
+    player_collider.stroke = null;  
+    // shape.stroke = 'gold';  
+
     // 初期位置
     player.x = this.gridX.center();
-    player.bottom = this.floor.top;
+    player.bottom = 20;
     // 画面タッチ時処理
     // タッチ開始時 onpointstart
     this.onpointstart = function(e) {
@@ -96,6 +105,8 @@ phina.define("MainScene", {
 
       // 床の上なら
       if (player.isOnFloor) {
+
+        console.log("player_collider");
 
         // 上方向に速度を与える（ジャンプ）
         player.physical.velocity.y = -JUMP_POWOR;
@@ -113,8 +124,6 @@ phina.define("MainScene", {
       //タッチした位置を保存
       TOUCH_START_X = e.pointer.x;
       TOUCH_START_Y = e.pointer.y;
-
-
 
     };
     // タッチ終了時 
@@ -139,46 +148,67 @@ phina.define("MainScene", {
         }
      }
      // 右に移動
-     if( ( TOUCH_START_X - e.pointer.x ) < 10 ){
+     if( ( TOUCH_START_X - e.pointer.x ) < -10 ){
         DIRECTION = 1;
         player.scaleX = DIRECTION;
         if (player.isOnFloor) {
           player.anim.gotoAndPlay('walk');
         }
      }
+
     }
 
     // 参照用
     this.player = player;
+    this.player_collider = player_collider;
   },
   // 毎フレーム処理
   update: function() {
     var player = this.player;
-    // 床とヒットしたら
-    if (player.hitTestElement(this.floor)) {
+    var player_collider = this.player;
+    player_collider.setPosition(player.x, player.y);
+
+    // 床とヒットしたらv1
+    if (player_collider.hitTestElement(this.floor)) {
+      // alert("stop");
+      // 位置調整
+      player.bottom = this.floor.top;
       // y方向の速度と重力を無効にする
       player.physical.velocity.y = 0;
       player.physical.gravity.y = 0;
-      // 位置調整
-      player.bottom = this.floor.top;
       // フラグ立て
       player.isOnFloor = true;
+      console.log("hit v1");
       // アニメーション変更
       player.anim.gotoAndPlay('wait');
-    }else{
     }
     if(FLG_TOUCH === true){
       player.physical.velocity.x = SPEED*DIRECTION;
-    }else{
-      if(player.physical.velocity.y < 0){
-        player.physical.velocity.y = player.physical.velocity.y*0.5;
+      if(player.isOnFloor === true){
+        player.anim.gotoAndPlay('walk');
       }
-      if(player.isOnFloor === true){//床の摩擦力を変更
-        player.physical.friction = 0.6;//摩擦力
+    }else{
+      if(player.physical.velocity.y < 0 && player.isOnFloor === false){
+        player.physical.velocity.y = player.physical.velocity.y*0.5;
+        player.physical.gravity.y = 0.6; 
       }
     }
-    if(player.isOnFloor === false){//途中でタッチをやめたら重力を減してゆっくり落下（小ジャンプ）
-      player.physical.gravity.y = 0.6; 
+    //床と接触している場合
+    if(player.isOnFloor === true){
+      //床の摩擦力を変更
+      player.physical.friction = 0.6;//摩擦力
+    }else{
+      //空中にいる時
+      // 重力復活
+      player.physical.gravity.y = GRAVITY;
+    }
+
+    //画面端から出さない
+    if (player.left < 0) {
+      player.left = 0;
+    }
+    if (player.right > SCREEN_WIDTH) {
+      player.right = SCREEN_WIDTH;
     }
   },
 });
@@ -198,7 +228,7 @@ phina.define('Player', {
     // 初速度を与える
     // this.physical.force(-2, 0);
     // 床の上かどうか
-    this.isOnFloor = true;
+    this.isOnFloor = false;
   },
   // 毎フレーム処理
   update: function() {
