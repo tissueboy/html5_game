@@ -1,9 +1,3 @@
-import "./style.scss";
-
-// phina.jsを有効化 <--- (1)
-import 'phina.js'
-
-import parcelPlayer from './assets/player_sprite.png'
 
 var SCREEN_WIDTH = 640;
 var SCREEN_HEIGHT = 960;
@@ -14,7 +8,9 @@ phina.globalize();
 var ASSETS = {
   // 画像
   image: {
-    'player': parcelPlayer,
+    'player': './assets/player_sprite.png',
+    'player_bullet': './assets/bullet_sprite.png',
+    'enemy': './assets/enemy_sprite.png',
   },
   // フレームアニメーション情報
   // スプライトシート
@@ -47,6 +43,46 @@ var ASSETS = {
         },
       }
     },
+    'bullet_ss':
+    {
+      // フレーム情報
+      "frame": {
+        "width": 64, // 1フレームの画像サイズ（横）
+        "height": 64, // 1フレームの画像サイズ（縦）
+        "cols": 8, // フレーム数（横）
+        "rows": 1, // フレーム数（縦）
+      },
+      // アニメーション情報
+      "animations" : {
+        "bullet": { // アニメーション名
+          "frames": [1], // フレーム番号範囲
+          "next": "bullet", // 次のアニメーション
+          "frequency": 1, // アニメーション間隔
+        },
+      }
+    },
+    'enemy_ss':
+    {
+      // フレーム情報
+      "frame": {
+        "width": 64, // 1フレームの画像サイズ（横）
+        "height": 64, // 1フレームの画像サイズ（縦）
+        "cols": 8, // フレーム数（横）
+        "rows": 1, // フレーム数（縦）
+      },
+      // アニメーション情報
+      "animations" : {
+        "enemy": { // アニメーション名
+          "frames": [1], // フレーム番号範囲
+          "next": "enemy", // 次のアニメーション
+          "frequency": 1, // アニメーション間隔
+        }
+      }
+    }
+  },
+  //LoadingSceneで読み込む場合の設定
+  tmx: {
+    "map": './assets/stage.tmx',
   }
 };
 // 定数
@@ -58,6 +94,9 @@ var SPEED = 4;
 var TOUCH_START_X = 0;
 var TOUCH_START_Y = 0;
 var HIT_RADIUS = 40;
+var FLG_WAIT = true;
+
+var PLAYER_BULLET_SPEED = 15; // 自弾速度
 
 /*
  * メインシーン
@@ -74,6 +113,20 @@ phina.define("MainScene", {
     });
     // 背景
     this.backgroundColor = 'skyblue';
+
+    this.mapBase = phina.display.DisplayElement()
+      .setPosition(0, 0)
+      .addChildTo(this);
+
+    //.tmxファイルからマップをイメージとして取得し、スプライトで表示
+    this.tmx = phina.asset.AssetManager.get("tmx", "map");
+    this.map = phina.display.Sprite(this.tmx.getImage())
+      .setOrigin(0, 0)
+      .setPosition(0, 0)
+      .addChildTo(this);
+
+    // 自弾グループ
+    this.playerBulletGroup = DisplayElement().addChildTo(this);
 
     Label({
       text: 'Touch To Jump',
@@ -97,29 +150,40 @@ phina.define("MainScene", {
 
     // 初期位置
     player.x = this.gridX.center();
-    player.bottom = 20;
+    player.bottom = 80;
+
+    // 敵作成
+    var enemy = Enemy('enemy').addChildTo(this);
+    // 初期位置
+    enemy.x = this.gridX.center();
+    enemy.bottom = 100;
+
     // 画面タッチ時処理
     // タッチ開始時 onpointstart
     this.onpointstart = function(e) {
       FLG_TOUCH = true;
 
       // 床の上なら
+
       if (player.isOnFloor) {
-
-        console.log("player_collider");
-
-        // 上方向に速度を与える（ジャンプ）
-        player.physical.velocity.y = -JUMP_POWOR;
-        // 重力復活
-        player.physical.gravity.y = GRAVITY;
-        // フラグ変更
-        player.isOnFloor = false;
-        // アニメーション変更
-        player.anim.gotoAndPlay('jump');
-
-        player.physical.friction = 0.97;//摩擦力
+        console.log("isOnFloor");
       
+      }else{
+        console.log("isOnFloor 2");
+        PlayerBullet().addChildTo(this.playerBulletGroup).setPosition(this.player.x, this.player.y);
       }
+
+      // 上方向に速度を与える（ジャンプ）
+      player.physical.velocity.y = -JUMP_POWOR;
+      // 重力復活
+      player.physical.gravity.y = GRAVITY;
+      // フラグ変更
+      player.isOnFloor = false;
+      // アニメーション変更
+      player.anim.gotoAndPlay('jump');
+
+      player.physical.friction = 0.97;//摩擦力
+
 
       //タッチした位置を保存
       TOUCH_START_X = e.pointer.x;
@@ -132,29 +196,28 @@ phina.define("MainScene", {
       FLG_TOUCH = false;
       DIRECTION = 0;
       if (player.isOnFloor) {
-        player.anim.gotoAndPlay('wait');
+        FLG_WAIT = true;
       }
 
     };
 
     // タッチ移動時
     this.onpointmove = function(e) {  
-     // 左に移動
-     if( ( TOUCH_START_X - e.pointer.x ) > 10 ){
+      // 左に移動
+      if( ( TOUCH_START_X - e.pointer.x ) > 10 ){
         DIRECTION = -1;
         player.scaleX = DIRECTION;
-        if (player.isOnFloor) {
-          player.anim.gotoAndPlay('walk');
-        }
-     }
-     // 右に移動
-     if( ( TOUCH_START_X - e.pointer.x ) < -10 ){
+        FLG_WAIT = false;
+      }
+      // 右に移動
+      if( ( TOUCH_START_X - e.pointer.x ) < -10 ){
         DIRECTION = 1;
         player.scaleX = DIRECTION;
-        if (player.isOnFloor) {
-          player.anim.gotoAndPlay('walk');
-        }
-     }
+        FLG_WAIT = false;
+      }
+      if( ( TOUCH_START_X - e.pointer.x ) <= 10 && ( TOUCH_START_X - e.pointer.x ) >= -10 ){
+        FLG_WAIT = true;
+      }
 
     }
 
@@ -180,11 +243,17 @@ phina.define("MainScene", {
       player.isOnFloor = true;
       console.log("hit v1");
       // アニメーション変更
-      player.anim.gotoAndPlay('wait');
+    }
+    if(player.isOnFloor === true){
+      if(FLG_WAIT == true){
+        player.anim.gotoAndPlay('wait');
+      }else{
+        player.anim.gotoAndPlay('walk');
+      }
     }
     if(FLG_TOUCH === true){
       player.physical.velocity.x = SPEED*DIRECTION;
-      if(player.isOnFloor === true){
+      if(player.isOnFloor === true && FLG_WAIT == false){
         player.anim.gotoAndPlay('walk');
       }
     }else{
@@ -210,7 +279,37 @@ phina.define("MainScene", {
     if (player.right > SCREEN_WIDTH) {
       player.right = SCREEN_WIDTH;
     }
+    if(this.mapCollision(player.x, player.y) === true){
+      // player.physical.velocity.y = 0;
+      // player.physical.gravity.y = 0;      
+    }
+
   },
+  //マップ衝突判定
+  mapCollision: function(x, y) {
+
+    console.log("x="+x+"/y="+y);
+
+    var mapx = Math.floor(x / 64);
+    var mapy = Math.floor(y / 128);
+    // var chara_area_x = x + 64;
+    // var chara_area_y = y + 64;
+
+    //マップデータから'Collision'レイヤーを取得
+    var collision = this.tmx.getMapData("collision");
+    console.log("-//"+this.tmx.width);
+    console.log("mapx="+mapx+"/mapy="+mapx);
+    console.log(mapy * this.tmx.width + mapx);
+
+    //指定座標にマップチップがあると真を返す
+    var chip = collision[mapy * this.tmx.width + mapx];
+    if (chip !== -1){
+      return true;
+    }else{
+      return false;
+    }
+  },
+
 });
 /*
  * プレイヤークラス
@@ -234,6 +333,43 @@ phina.define('Player', {
   update: function() {
 
   },
+});
+// PlayerBulletクラス
+phina.define('PlayerBullet',{
+  superClass: 'Sprite',
+  // コンストラクタ
+  init: function() {
+    this.superInit('player_bullet');
+    // フレームアニメーションをアタッチ
+    this.anim = FrameAnimation('bullet_ss').attachTo(this);
+    // 初期アニメーション指定
+    this.anim.gotoAndPlay('bullet');
+    this.physical.velocity.y = +PLAYER_BULLET_SPEED; //弾速
+  },
+  // 毎フレーム更新処理
+  update: function() {
+    // 画面上到達で削除
+    if (this.top < 0) {
+      this.remove();
+    }
+  }
+});
+// PlayerBulletクラス
+phina.define('Enemy',{
+  superClass: 'Sprite',
+  // コンストラクタ
+  init: function() {
+    this.superInit('enemy');
+    // フレームアニメーションをアタッチ
+    this.anim = FrameAnimation('enemy_ss').attachTo(this);
+    // 初期アニメーション指定
+    this.anim.gotoAndPlay('enemy');
+    // this.physical.velocity.y = +PLAYER_BULLET_SPEED; //弾速
+  },
+  // 毎フレーム更新処理
+  update: function() {
+
+  }
 });
 /*
  * メイン処理
